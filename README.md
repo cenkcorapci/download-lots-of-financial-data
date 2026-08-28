@@ -23,15 +23,15 @@ datasets/sp500-sample-ohlcv/
     └── data.parquet
 ```
 
-## Dataset categories (44 total)
+## Dataset categories (47 total)
 
 | Category | Count | Sources |
 |----------|-------|---------|
-| Stocks | 11 | Yahoo Finance, Kaggle |
-| Forex | 5 | Yahoo Finance, Kaggle |
-| Crypto | 7 | Yahoo Finance, Binance, Kaggle, HF |
+| Stocks | 14 | Yahoo Finance, yfinance bulk fallback |
+| Forex | 5 | Yahoo Finance, Frankfurter/ECB API |
+| Crypto | 7 | Yahoo Finance, Binance, yfinance fallback |
 | Macro / Sector | 6 | FRED, World Bank, Yahoo Finance |
-| News / Sentiment | 8 | HuggingFace, Kaggle, CryptoPanic |
+| News / Sentiment | 8 | HuggingFace, RSS feeds, finance-alpaca |
 | Polymarket | 2 | Polymarket Gamma API |
 | Company Info | 4 | Wikipedia, SEC EDGAR, Yahoo Finance |
 | Order Book (L2/L3) | 2 | Binance API, HuggingFace crypto-lob-stream |

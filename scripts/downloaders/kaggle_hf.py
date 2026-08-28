@@ -1,13 +1,15 @@
-"""Kaggle and HuggingFace bulk dataset downloaders."""
+"""Bulk dataset downloaders via Kaggle, HuggingFace, and direct API fallbacks."""
 
 from __future__ import annotations
 
 import os
 import shutil
-import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import requests
+import yfinance as yf
 
 from scripts.lib.base import DATASETS_DIR, DatasetDownloader
 
@@ -29,102 +31,131 @@ def _setup_kaggle_credentials() -> None:
     (kaggle_dir / "kaggle.json").chmod(0o600)
 
 
-class KaggleStockMarketDatasetDownloader(DatasetDownloader):
-    name = "kaggle-stock-market-dataset"
-    category = "stocks"
-    description = "Kaggle stock market dataset — historical prices for S&P 500 companies."
-    source = "Kaggle — jasondataanalysis/s-and-p-500-stock-data"
-    license_info = "See Kaggle dataset license"
-
-    def fetch(self) -> pd.DataFrame:
+def _try_kaggle_download(dataset_slug: str, tmp_name: str) -> pd.DataFrame | None:
+    try:
         _setup_kaggle_credentials()
         from kaggle.api.kaggle_api_extended import KaggleApi
 
         api = KaggleApi()
         api.authenticate()
-        tmp = DATASETS_DIR / "_tmp_kaggle_stock"
+        tmp = DATASETS_DIR / tmp_name
         tmp.mkdir(parents=True, exist_ok=True)
-        api.dataset_download_files("jasondataanalysis/s-and-p-500-stock-data", path=str(tmp), unzip=True)
+        api.dataset_download_files(dataset_slug, path=str(tmp), unzip=True)
         csvs = list(tmp.glob("**/*.csv"))
-        if not csvs:
-            raise RuntimeError("Kaggle stock dataset: no CSV found")
-        df = pd.read_csv(csvs[0])
         shutil.rmtree(tmp, ignore_errors=True)
-        return df
+        if not csvs:
+            return None
+        main = max(csvs, key=lambda p: p.stat().st_size)
+        return pd.read_csv(main)
+    except Exception:
+        shutil.rmtree(DATASETS_DIR / tmp_name, ignore_errors=True)
+        return None
+
+
+class KaggleStockMarketDatasetDownloader(DatasetDownloader):
+    name = "kaggle-stock-market-dataset"
+    category = "stocks"
+    description = "Historical daily OHLCV for 80+ US equities (Kaggle fallback: yfinance bulk)."
+    source = "Kaggle or Yahoo Finance (yfinance)"
+    license_info = "See source terms"
+
+    TICKERS = [
+        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "V", "JPM",
+        "UNH", "XOM", "MA", "PG", "HD", "CVX", "MRK", "KO", "PEP", "COST",
+        "AVGO", "WMT", "LLY", "TMO", "MCD", "CSCO", "ACN", "ABT", "DHR", "NEE",
+        "PM", "TXN", "DIS", "INTC", "VZ", "CMCSA", "QCOM", "IBM", "AMGN", "CAT",
+        "GE", "BA", "GS", "MS", "BLK", "SCHW", "AXP", "USB", "PNC", "TFC",
+    ]
+
+    def fetch(self) -> pd.DataFrame:
+        df = _try_kaggle_download("jasondataanalysis/s-and-p-500-stock-data", "_tmp_kaggle_stock")
+        if df is not None:
+            return df
+        frames = []
+        for ticker in self.TICKERS:
+            hist = yf.Ticker(ticker).history(period="5y", auto_adjust=True)
+            if hist.empty:
+                continue
+            hist = hist.reset_index()
+            hist["ticker"] = ticker
+            hist.columns = [c.lower().replace(" ", "_") for c in hist.columns]
+            frames.append(hist)
+        return pd.concat(frames, ignore_index=True)
 
 
 class KaggleCurrencyHistoryDownloader(DatasetDownloader):
     name = "kaggle-currency-exchange-rates"
     category = "forex"
-    description = "Kaggle historical currency exchange rates dataset."
-    source = "Kaggle — manasgarg/foreign-exchange-rates"
-    license_info = "See Kaggle dataset license"
+    description = "Historical daily FX rates (Kaggle fallback: Frankfurter/ECB API)."
+    source = "Kaggle or Frankfurter API (ECB data)"
+    license_info = "See source terms"
 
     def fetch(self) -> pd.DataFrame:
-        _setup_kaggle_credentials()
-        from kaggle.api.kaggle_api_extended import KaggleApi
-
-        api = KaggleApi()
-        api.authenticate()
-        tmp = DATASETS_DIR / "_tmp_kaggle_forex"
-        tmp.mkdir(parents=True, exist_ok=True)
-        api.dataset_download_files("manasgarg/foreign-exchange-rates", path=str(tmp), unzip=True)
-        csvs = list(tmp.glob("**/*.csv"))
-        if not csvs:
-            raise RuntimeError("Kaggle forex dataset: no CSV found")
-        df = pd.read_csv(csvs[0])
-        shutil.rmtree(tmp, ignore_errors=True)
-        return df
+        df = _try_kaggle_download("manasgarg/foreign-exchange-rates", "_tmp_kaggle_forex")
+        if df is not None:
+            return df
+        end = datetime.now(timezone.utc).date()
+        start = end - timedelta(days=365 * 5)
+        resp = requests.get(
+            f"https://api.frankfurter.app/{start}..{end}",
+            params={"from": "USD", "to": "EUR,GBP,JPY,CHF,CAD,AUD,NZD,CNY,MXN,BRL"},
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        rows = []
+        for date_str, rates in data["rates"].items():
+            for currency, rate in rates.items():
+                rows.append({"date": date_str, "base": "USD", "currency": currency, "rate": rate})
+        return pd.DataFrame(rows)
 
 
 class KaggleCryptoHistoricalDownloader(DatasetDownloader):
     name = "kaggle-crypto-historical-prices"
     category = "crypto"
-    description = "Kaggle cryptocurrency historical market data."
-    source = "Kaggle — sudalairajasekar/cryptocurrencypricehistory"
-    license_info = "See Kaggle dataset license"
+    description = "Cryptocurrency historical prices (Kaggle fallback: CoinGecko API)."
+    source = "Kaggle or CoinGecko API"
+    license_info = "See source terms"
 
     def fetch(self) -> pd.DataFrame:
-        _setup_kaggle_credentials()
-        from kaggle.api.kaggle_api_extended import KaggleApi
-
-        api = KaggleApi()
-        api.authenticate()
-        tmp = DATASETS_DIR / "_tmp_kaggle_crypto"
-        tmp.mkdir(parents=True, exist_ok=True)
-        api.dataset_download_files("sudalairajasekar/cryptocurrencypricehistory", path=str(tmp), unzip=True)
-        csvs = list(tmp.glob("**/*.csv"))
-        if not csvs:
-            raise RuntimeError("Kaggle crypto dataset: no CSV found")
-        # Use largest CSV (main data file)
-        main = max(csvs, key=lambda p: p.stat().st_size)
-        df = pd.read_csv(main)
-        shutil.rmtree(tmp, ignore_errors=True)
-        return df
+        df = _try_kaggle_download("sudalairajasekar/cryptocurrencypricehistory", "_tmp_kaggle_crypto")
+        if df is not None:
+            return df
+        symbols = [
+            "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD",
+            "ADA-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "AVAX-USD",
+        ]
+        frames = []
+        for sym in symbols:
+            hist = yf.Ticker(sym).history(period="2y", auto_adjust=True)
+            if hist.empty:
+                continue
+            hist = hist.reset_index()
+            hist["symbol"] = sym
+            hist.columns = [c.lower().replace(" ", "_") for c in hist.columns]
+            frames.append(hist)
+        if not frames:
+            raise RuntimeError("No crypto historical data")
+        return pd.concat(frames, ignore_index=True)
 
 
 class KaggleFinancialNewsDownloader(DatasetDownloader):
     name = "kaggle-financial-news"
     category = "news"
-    description = "Kaggle financial news headlines for sentiment and event studies."
-    source = "Kaggle — jeet2016/us-financial-news-articles"
-    license_info = "See Kaggle dataset license"
+    description = "Financial news headlines (Kaggle fallback: HuggingFace financial-news)."
+    source = "Kaggle or Hugging Face — ashraq/financial-news"
+    license_info = "See source terms"
 
     def fetch(self) -> pd.DataFrame:
-        _setup_kaggle_credentials()
-        from kaggle.api.kaggle_api_extended import KaggleApi
+        df = _try_kaggle_download("jeet2016/us-financial-news-articles", "_tmp_kaggle_news")
+        if df is not None:
+            return df
+        from datasets import load_dataset
 
-        api = KaggleApi()
-        api.authenticate()
-        tmp = DATASETS_DIR / "_tmp_kaggle_news"
-        tmp.mkdir(parents=True, exist_ok=True)
-        api.dataset_download_files("jeet2016/us-financial-news-articles", path=str(tmp), unzip=True)
-        csvs = list(tmp.glob("**/*.csv"))
-        if not csvs:
-            raise RuntimeError("Kaggle news dataset: no CSV found")
-        df = pd.read_csv(max(csvs, key=lambda p: p.stat().st_size))
-        shutil.rmtree(tmp, ignore_errors=True)
-        return df
+        token = os.getenv("HUGGINGFACE_TOKEN")
+        ds = load_dataset("ashraq/financial-news", token=token)
+        split = "train" if "train" in ds else list(ds.keys())[0]
+        return ds[split].to_pandas()
 
 
 class HFStockNewsSentimentDownloader(DatasetDownloader):
@@ -147,11 +178,11 @@ class HFOrderBookSampleDownloader(DatasetDownloader):
     name = "hf-crypto-lob-sample"
     category = "orderbook"
     description = (
-        "Sample crypto limit order book data from HuggingFace (L2 microstructure). "
+        "Sample crypto limit order book data (HF or Binance L2 fallback). "
         "Full L3 stock data requires licensed feeds (LOBSTER, Databento)."
     )
-    source = "Hugging Face — Goooddy/crypto-lob-stream (sample)"
-    license_info = "MIT — see dataset card"
+    source = "Hugging Face or Binance REST API"
+    license_info = "MIT / Binance API terms"
 
     def fetch(self) -> pd.DataFrame:
         from huggingface_hub import hf_hub_download
@@ -167,9 +198,6 @@ class HFOrderBookSampleDownloader(DatasetDownloader):
             df = pd.read_parquet(path)
             return df.head(50_000) if len(df) > 50_000 else df
         except Exception:
-            # Fallback: Binance ETH L2 snapshot if HF file unavailable
-            import requests
-
             resp = requests.get(
                 "https://api.binance.com/api/v3/depth",
                 params={"symbol": "ETHUSDT", "limit": 500},

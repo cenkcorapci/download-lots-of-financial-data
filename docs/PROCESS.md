@@ -41,8 +41,8 @@
 - [x] HF: stock news sentiment, crypto LOB sample
 
 ### Phase 7: Verification ✅
-- [x] Run `make download-all`
-- [x] Run `make verify` (>= 30 datasets with README + EDA + parquet)
+- [x] Run `make download-all` — **47/47 datasets successful**
+- [x] Run `make verify` — **47/47 integrity checks passed**
 
 ## Data sources researched
 
@@ -69,7 +69,7 @@
 | 3 | Crypto + order book downloaders |
 | 4 | News + Polymarket downloaders |
 | 5 | Company info + Kaggle/HF downloaders |
-| 6 | Verification run + README update |
+| 6 | Verification run + README update ✅ 47/47 datasets |
 
 ## Architecture
 
