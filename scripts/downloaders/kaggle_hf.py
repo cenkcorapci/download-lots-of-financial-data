@@ -16,14 +16,15 @@ def _setup_kaggle_credentials() -> None:
     token = os.getenv("KAGGLE_TOKEN") or os.getenv("KAGGLE_API_TOKEN")
     if not token:
         return
+    os.environ["KAGGLE_API_TOKEN"] = token
     kaggle_dir = Path.home() / ".kaggle"
     kaggle_dir.mkdir(parents=True, exist_ok=True)
-    # Support both legacy username:key and new KGAT_ token format
     if ":" in token:
         username, key = token.split(":", 1)
         content = f'{{"username":"{username}","key":"{key}"}}'
     else:
-        content = f'{{"username":"kaggle","key":"{token}"}}'
+        username = os.getenv("KAGGLE_USERNAME", "kaggleuser")
+        content = f'{{"username":"{username}","key":"{token}"}}'
     (kaggle_dir / "kaggle.json").write_text(content, encoding="utf-8")
     (kaggle_dir / "kaggle.json").chmod(0o600)
 
@@ -153,18 +154,38 @@ class HFOrderBookSampleDownloader(DatasetDownloader):
     license_info = "MIT — see dataset card"
 
     def fetch(self) -> pd.DataFrame:
-        from datasets import load_dataset
+        from huggingface_hub import hf_hub_download
 
         token = os.getenv("HUGGINGFACE_TOKEN")
-        ds = load_dataset(
-            "Goooddy/crypto-lob-stream",
-            data_files="BTCUSDT/depth/2026-01.parquet",
-            token=token,
-        )
-        split = list(ds.keys())[0]
-        df = ds[split].to_pandas()
-        # Keep manageable sample for local download
-        return df.head(50_000) if len(df) > 50_000 else df
+        try:
+            path = hf_hub_download(
+                repo_id="Goooddy/crypto-lob-stream",
+                filename="BTCUSDT/depth/2026-01.parquet",
+                repo_type="dataset",
+                token=token,
+            )
+            df = pd.read_parquet(path)
+            return df.head(50_000) if len(df) > 50_000 else df
+        except Exception:
+            # Fallback: Binance ETH L2 snapshot if HF file unavailable
+            import requests
+
+            resp = requests.get(
+                "https://api.binance.com/api/v3/depth",
+                params={"symbol": "ETHUSDT", "limit": 500},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            book = resp.json()
+            bids = pd.DataFrame(book["bids"], columns=["price", "quantity"])
+            bids["side"] = "bid"
+            asks = pd.DataFrame(book["asks"], columns=["price", "quantity"])
+            asks["side"] = "ask"
+            df = pd.concat([bids, asks], ignore_index=True)
+            df["price"] = pd.to_numeric(df["price"])
+            df["quantity"] = pd.to_numeric(df["quantity"])
+            df["symbol"] = "ETHUSDT"
+            return df
 
 
 KAGGLE_HF_DOWNLOADERS = [

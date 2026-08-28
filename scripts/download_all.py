@@ -13,7 +13,7 @@ from tqdm import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.datasets.registry import get_all_downloaders
+from scripts.downloaders.registry import get_all_downloaders
 from scripts.lib.manifest import write_manifest
 
 logging.basicConfig(

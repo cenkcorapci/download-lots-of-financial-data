@@ -20,7 +20,13 @@ class SP500CompanyListDownloader(DatasetDownloader):
 
     def fetch(self) -> pd.DataFrame:
         url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
+        resp = requests.get(
+            url,
+            timeout=60,
+            headers={"User-Agent": "download-lots-of-financial-data/1.0 (research)"},
+        )
+        resp.raise_for_status()
+        tables = pd.read_html(io.StringIO(resp.text))
         df = tables[0]
         df.columns = [c.lower().replace(" ", "_") for c in df.columns]
         return df

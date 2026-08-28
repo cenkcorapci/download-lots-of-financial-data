@@ -101,29 +101,21 @@ class CryptoPanicNewsDownloader(DatasetDownloader):
     license_info = "CryptoPanic terms of use"
 
     def fetch(self) -> pd.DataFrame:
-        resp = requests.get(
-            "https://cryptopanic.com/api/v1/posts/",
-            params={"public": "true"},
-            timeout=60,
-            headers={"User-Agent": "download-lots-of-financial-data/1.0"},
-        )
-        resp.raise_for_status()
-        results = resp.json().get("results", [])
+        import feedparser
+
+        feed = feedparser.parse("https://cryptopanic.com/news/rss/")
         rows = []
-        for item in results:
+        for entry in feed.entries[:200]:
             rows.append(
                 {
-                    "id": item.get("id"),
-                    "title": item.get("title"),
-                    "published_at": item.get("published_at"),
-                    "url": item.get("url"),
-                    "source": item.get("source", {}).get("title") if item.get("source") else None,
-                    "kind": item.get("kind"),
-                    "currencies": ",".join(c.get("code", "") for c in item.get("currencies", [])),
+                    "title": entry.get("title"),
+                    "link": entry.get("link"),
+                    "published": entry.get("published"),
+                    "summary": entry.get("summary", "")[:500],
                 }
             )
         if not rows:
-            raise RuntimeError("No CryptoPanic news returned")
+            raise RuntimeError("No CryptoPanic RSS entries returned")
         return pd.DataFrame(rows)
 
 

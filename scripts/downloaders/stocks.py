@@ -171,6 +171,45 @@ class DividendAristocratsDownloader(DatasetDownloader):
         return _download_tickers(self.TICKERS, self.name)
 
 
+class REITETFsDownloader(DatasetDownloader):
+    name = "reit-etfs-ohlcv"
+    category = "stocks"
+    description = "Daily OHLCV for real estate investment trust ETFs."
+    source = "Yahoo Finance (yfinance)"
+    license_info = "Yahoo Finance terms of use"
+
+    TICKERS = ["VNQ", "IYR", "SCHH", "RWR", "USRT"]
+
+    def fetch(self) -> pd.DataFrame:
+        return _download_tickers(self.TICKERS, self.name)
+
+
+class EmergingMarketsETFDownloader(DatasetDownloader):
+    name = "emerging-markets-etf-ohlcv"
+    category = "stocks"
+    description = "Daily OHLCV for emerging markets equity ETFs."
+    source = "Yahoo Finance (yfinance)"
+    license_info = "Yahoo Finance terms of use"
+
+    TICKERS = ["EEM", "VWO", "IEMG", "SCHE", "EWZ", "FXI", "INDA"]
+
+    def fetch(self) -> pd.DataFrame:
+        return _download_tickers(self.TICKERS, self.name)
+
+
+class ThematicETFsDownloader(DatasetDownloader):
+    name = "thematic-etfs-ohlcv"
+    category = "stocks"
+    description = "Daily OHLCV for thematic ETFs (AI, clean energy, cybersecurity, semiconductors)."
+    source = "Yahoo Finance (yfinance)"
+    license_info = "Yahoo Finance terms of use"
+
+    TICKERS = ["BOTZ", "ICLN", "HACK", "SOXX", "ARKK", "XBI"]
+
+    def fetch(self) -> pd.DataFrame:
+        return _download_tickers(self.TICKERS, self.name)
+
+
 STOCK_DOWNLOADERS = [
     SP500SampleDownloader,
     Nasdaq100Downloader,
@@ -182,4 +221,7 @@ STOCK_DOWNLOADERS = [
     BondETFsDownloader,
     SmallCapETFDownloader,
     DividendAristocratsDownloader,
+    REITETFsDownloader,
+    EmergingMarketsETFDownloader,
+    ThematicETFsDownloader,
 ]

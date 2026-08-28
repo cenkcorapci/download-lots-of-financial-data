@@ -120,7 +120,7 @@ class WorldBankIndicatorsDownloader(DatasetDownloader):
             "https://api.worldbank.org/v2/country/{countries}/indicator/NY.GDP.MKTP.KD.ZG"
             "?format=json&per_page=500"
         ).format(countries=self.COUNTRIES)
-        resp = requests.get(url, timeout=60)
+        resp = requests.get(url, timeout=120)
         resp.raise_for_status()
         payload = resp.json()
         records = payload[1]
@@ -154,9 +154,9 @@ class SectorProductionDownloader(DatasetDownloader):
         "IPMAN": "manufacturing",
         "IPUTIL": "utilities",
         "IPMINE": "mining",
-        "IPFIN": "finance_related",
         "IPCONGD": "consumer_goods",
         "IPBUSEQ": "business_equipment",
+        "IPMAT": "materials",
     }
 
     def fetch(self) -> pd.DataFrame:
