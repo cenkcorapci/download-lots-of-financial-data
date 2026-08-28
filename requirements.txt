@@ -1,0 +1,13 @@
+pandas>=2.2.0
+numpy>=1.26.0
+pyarrow>=15.0.0
+requests>=2.31.0
+yfinance>=0.2.40
+fredapi>=0.5.2
+python-dotenv>=1.0.0
+kaggle>=1.6.0
+huggingface_hub>=0.23.0
+datasets>=2.19.0
+nbformat>=5.10.0
+tqdm>=4.66.0
+pytz>=2024.1

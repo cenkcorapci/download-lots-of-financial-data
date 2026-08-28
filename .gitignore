@@ -16,6 +16,7 @@ eggs/
 .eggs/
 lib/
 lib64/
+!scripts/lib/
 parts/
 sdist/
 var/
@@ -216,3 +217,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Downloaded datasets (large; regenerate with make download-all)
+datasets/
+.kaggle/
+tmp/
