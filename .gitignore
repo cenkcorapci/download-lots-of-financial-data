@@ -219,6 +219,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Downloaded datasets (large; regenerate with make download-all)
-datasets/
+/datasets/
 .kaggle/
 tmp/
